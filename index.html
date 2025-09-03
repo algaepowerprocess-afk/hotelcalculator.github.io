@@ -1,3 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel Savings & Emissions Benefits - Sargassum Biochar Power</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 900px;
+        margin: auto;
+        padding: 20px;
+        background: #f5f5f5;
+    }
+    h1 {
+        text-align: center;
+        color: #2c3e50;
+    }
+    label {
+        font-weight: bold;
+        display: block;
+        margin-top: 15px;
+    }
+    input[type="number"] {
+        width: 100%;
+        padding: 8px;
+        margin-top: 5px;
+        box-sizing: border-box;
+    }
+    .checkbox-group {
+        margin-top: 10px;
+    }
+    .checkbox-group label {
+        font-weight: normal;
+        display: block;
+    }
+    button {
+        margin-top: 20px;
+        padding: 10px;
+        width: 100%;
+        font-size: 16px;
+        background-color: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    button:hover {
+        background-color: #219150;
+    }
+    .result {
+        margin-top: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    .financing-section {
+        margin-top: 30px;
+        border-top: 2px solid #ccc;
+        padding-top: 20px;
+        display: none; /* Hidden by default */
+    }
+    @media (max-width: 600px) {
+        body { padding: 10px; }
+    }
+</style>
+</head>
+<body>
 <h1>Hotel Electricity Savings & Emissions Benefits</h1>
 
 <label>Max power load (kW):</label>
@@ -152,7 +221,7 @@ function calculate() {
             <p><strong>Payback (electricity only):</strong> ${paybackYears.toFixed(1)} years</p>
         `;
     } else {
-        savingOutput = <p style="color:red;"><strong>No viable electricity savings:</strong> Annual spend too low (below service threshold).</p>;
+        savingOutput = `<p style="color:red;"><strong>No viable electricity savings:</strong> Annual spend too low (below service threshold).</p>`;
     }
 
     document.getElementById("result").innerHTML = `
@@ -201,10 +270,12 @@ function recalculateFinancing() {
     const annualPayment = monthlyPayment * 12;
     const netAnnualBenefit = lastTotalAnnualBenefit - annualPayment;
 
-    // New, correct payback calculation
+    // Calculate payback for the financed scenario
     let financedPayback = 0;
     if (netAnnualBenefit > 0) {
         financedPayback = downPayment / netAnnualBenefit;
+    } else {
+        financedPayback = Infinity;
     }
 
     const financingResults = `
@@ -220,3 +291,5 @@ function recalculateFinancing() {
     document.getElementById("result").innerHTML += financingResults;
 }
 </script>
+</body>
+</html>
