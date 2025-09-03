@@ -1,0 +1,222 @@
+<h1>Hotel Electricity Savings & Emissions Benefits</h1>
+
+<label>Max power load (kW):</label>
+<input type="number" id="maxLoad" value="500" step="1" min="0">
+
+<label>Daily average electricity consumption (kWh/day):</label>
+<input type="number" id="avgConsumption" value="8000" step="1" min="0">
+
+<label>Electricity cost ($/kWh):</label>
+<input type="number" id="electricityRate" value="0.35" step="0.01" min="0">
+
+<label>Operating days per year:</label>
+<input type="number" id="operatingDays" value="365" step="1" min="0" max="365">
+
+<label>Sargassum moisture content (% fresh basis):</label>
+<input type="number" id="moistureContent" value="85" step="0.1" min="0" max="100">
+
+<hr>
+<h3>Additional Economic Parameters</h3>
+<label>Carbon credit price ($/tCO₂e):</label>
+<input type="number" id="carbonPrice" value="30" step="1" min="0">
+
+<label>Waste disposal cost ($/t fresh sargassum):</label>
+<input type="number" id="wasteCost" value="50" step="1" min="0">
+
+<div class="checkbox-group">
+    <label><input type="checkbox" id="includeElectricity" checked> Include electricity savings</label>
+    <label><input type="checkbox" id="includeCarbon" checked> Include carbon value</label>
+    <label><input type="checkbox" id="includeWaste" checked> Include waste disposal savings</label>
+</div>
+
+<hr>
+<h3>Emissions Parameters (Fixed, Conservative)</h3>
+<ul>
+  <li>Methane GWP₁₀₀: <strong>27.2</strong></li>
+  <li>Carbon content of dry sargassum: <strong>30%</strong></li>
+  <li>Fraction of dry carbon emitted as CH₄ in landfill: <strong>50%</strong></li>
+</ul>
+
+<button onclick="calculate()">Calculate</button>
+
+<div class="result" id="result"></div>
+
+<div class="financing-section" id="financingSection">
+    <h2>Have Access to Finance? Let's Re-run the Numbers!</h2>
+    <label>Down payment ($):</label>
+    <input type="number" id="downPayment" value="150000" step="1000" min="0">
+
+    <label>Interest rate (%):</label>
+    <input type="number" id="interestRate" value="12" step="0.1" min="0">
+
+    <label>Financing Duration (years):</label>
+    <input type="number" id="durationYears" value="5" step="1" min="1">
+    
+    <button onclick="recalculateFinancing()">Recalculate Payback with Financing</button>
+</div>
+
+<script>
+let lastCapex = 0;
+let lastTotalAnnualBenefit = 0;
+
+function calculate() {
+    // Inputs
+    const maxLoad = parseFloat(document.getElementById("maxLoad").value);
+    const avgConsumption = parseFloat(document.getElementById("avgConsumption").value);
+    const electricityPrice = parseFloat(document.getElementById("electricityRate").value);
+    const operatingDays = parseFloat(document.getElementById("operatingDays").value);
+    const moistureContent = parseFloat(document.getElementById("moistureContent").value) / 100;
+    const carbonPrice = parseFloat(document.getElementById("carbonPrice").value);
+    const wasteCost = parseFloat(document.getElementById("wasteCost").value);
+
+    const incElec = document.getElementById("includeElectricity").checked;
+    const incCarbon = document.getElementById("includeCarbon").checked;
+    const incWaste = document.getElementById("includeWaste").checked;
+
+    // Fixed emission parameters
+    const CH4GWP = 27.2;
+    const carbonDry = 0.30;
+    const CH4fraction = 0.50;
+
+    // Constants
+    const kWhPerKgDry = 1;
+    const costPerKW = 1000;
+    const minCapex = 250000;
+    const baseSavingPct = 0.30;
+    const savingIncrement = 0.02;
+    const incrementStep = 50000;
+    const maxSavingPct = 0.60;
+    const gridEF = 0.0006; // t CO2e/kWh
+
+    // System sizing & economics
+    const systemCapacityKW = maxLoad;
+    const capex = Math.max(minCapex, systemCapacityKW * costPerKW);
+    lastCapex = capex; // Store for financing calculation
+
+    const annualConsumption = avgConsumption * operatingDays;
+    const annualSpend = annualConsumption * electricityPrice;
+
+    // Determine savings %
+    let savingPct = baseSavingPct;
+    if (annualSpend >= 500000) {
+        const extra = annualSpend - 500000;
+        const increments = Math.floor(extra / incrementStep);
+        savingPct += increments * savingIncrement;
+        if (savingPct > maxSavingPct) savingPct = maxSavingPct;
+    }
+
+    // Annual saving (electricity)
+    let annualSaving = 0;
+    if (annualSpend * baseSavingPct >= minCapex || annualSpend >= 500000) {
+        annualSaving = annualSpend * savingPct;
+    }
+
+    const paybackYears = (annualSaving > 0) ? capex / annualSaving : 0;
+
+    // Biomass requirements
+    const dailyDryBiomass_kg = avgConsumption / kWhPerKgDry;
+    const dailyFreshBiomass_kg = dailyDryBiomass_kg / (1 - moistureContent);
+
+    const annualFreshBiomass_t = (dailyFreshBiomass_kg * operatingDays) / 1000;
+    const annualDryBiomass_t = (dailyDryBiomass_kg * operatingDays) / 1000;
+
+    // Emissions avoidance
+    const CO2e_gridAvoid = Math.round(annualConsumption * gridEF);
+    const C_in_dry = annualDryBiomass_t * carbonDry;
+    const C_as_CH4 = C_in_dry * CH4fraction;
+    const CH4_mass_t = C_as_CH4 * (16/12);
+    const CO2e_CH4Avoid = Math.round(CH4_mass_t * CH4GWP);
+    const total_CO2e_avoid = CO2e_gridAvoid + CO2e_CH4Avoid;
+
+    // Value of avoided emissions
+    const carbonValue = total_CO2e_avoid * carbonPrice;
+
+    // Waste disposal savings
+    const wasteSaving = annualFreshBiomass_t * wasteCost;
+
+    // Total benefit with toggles
+    let totalAnnualBenefit = 0;
+    if (incElec) totalAnnualBenefit += annualSaving;
+    if (incCarbon) totalAnnualBenefit += carbonValue;
+    if (incWaste) totalAnnualBenefit += wasteSaving;
+    lastTotalAnnualBenefit = totalAnnualBenefit; // Store for financing calculation
+
+    const paybackTotal = (totalAnnualBenefit > 0) ? capex / totalAnnualBenefit : 0;
+
+    // Output
+    let savingOutput = "";
+    if (annualSaving > 0) {
+        savingOutput = `
+            <p><strong>Effective saving rate:</strong> ${(savingPct*100).toFixed(1)}%</p>
+            <p><strong>Annual electricity saving:</strong> $${annualSaving.toLocaleString(undefined,{minimumFractionDigits:0})}</p>
+            <p><strong>Payback (electricity only):</strong> ${paybackYears.toFixed(1)} years</p>
+        `;
+    } else {
+        savingOutput = <p style="color:red;"><strong>No viable electricity savings:</strong> Annual spend too low (below service threshold).</p>;
+    }
+
+    document.getElementById("result").innerHTML = `
+        <h3>System Sizing & Economics</h3>
+        <p><strong>System capacity:</strong> ${systemCapacityKW.toLocaleString()} kW</p>
+        <p><strong>CAPEX investment:</strong> $${capex.toLocaleString()}</p>
+        <p><strong>Annual electricity consumption:</strong> ${annualConsumption.toLocaleString()} kWh</p>
+        <p><strong>Annual electricity spend:</strong> $${annualSpend.toLocaleString(undefined,{minimumFractionDigits:0})}</p>
+        ${savingOutput}
+        <hr>
+        <p><strong>Daily dry sargassum needed:</strong> ${dailyDryBiomass_kg.toLocaleString(undefined,{maximumFractionDigits:0})} kg/day</p>
+        <p><strong>Daily fresh sargassum needed:</strong> ${dailyFreshBiomass_kg.toLocaleString(undefined,{maximumFractionDigits:0})} kg/day (at ${(moistureContent*100).toFixed(0)}% moisture)</p>
+        <p><strong>Annual fresh sargassum processed:</strong> ${annualFreshBiomass_t.toLocaleString(undefined,{maximumFractionDigits:0})} t/year</p>
+        <hr>
+        <h3>Emissions Avoidance</h3>
+        <p><strong>Grid CO₂e avoided:</strong> ${CO2e_gridAvoid.toLocaleString()} t CO₂e/year</p>
+        <p><strong>Methane avoided from landfill:</strong> ${Math.round(CH4_mass_t).toLocaleString()} t CH₄/year → ${CO2e_CH4Avoid.toLocaleString()} t CO₂e/year</p>
+        <p><strong>Total CO₂e benefit:</strong> ${total_CO2e_avoid.toLocaleString()} t CO₂e/year</p>
+        <p><strong>Value of avoided emissions (@ $${carbonPrice}/t):</strong> $${carbonValue.toLocaleString(undefined,{minimumFractionDigits:0})}/year</p>
+        <hr>
+        <h3>Waste Disposal Savings</h3>
+        <p><strong>Annual saving from avoided disposal:</strong> $${wasteSaving.toLocaleString(undefined,{minimumFractionDigits:0})}/year</p>
+        <hr>
+        <h3 style="color:green;">Total Annual Benefit</h3>
+        <p><strong>Combined benefit (based on selected options):</strong> $${totalAnnualBenefit.toLocaleString(undefined,{minimumFractionDigits:0})}/year</p>
+        <p><strong>Payback (total benefit):</strong> ${paybackTotal.toFixed(1)} years</p>
+    `;
+
+    document.getElementById("financingSection").style.display = "block";
+}
+
+function recalculateFinancing() {
+    const downPayment = parseFloat(document.getElementById("downPayment").value);
+    const interestRate = parseFloat(document.getElementById("interestRate").value) / 100 / 12; // Monthly rate
+    const durationMonths = parseFloat(document.getElementById("durationYears").value) * 12;
+
+    const loanAmount = lastCapex - downPayment;
+    let monthlyPayment = 0;
+
+    if (interestRate > 0) {
+        monthlyPayment = loanAmount * (interestRate * Math.pow(1 + interestRate, durationMonths)) / (Math.pow(1 + interestRate, durationMonths) - 1);
+    } else {
+        monthlyPayment = loanAmount / durationMonths;
+    }
+
+    const annualPayment = monthlyPayment * 12;
+    const netAnnualBenefit = lastTotalAnnualBenefit - annualPayment;
+
+    // New, correct payback calculation
+    let financedPayback = 0;
+    if (netAnnualBenefit > 0) {
+        financedPayback = downPayment / netAnnualBenefit;
+    }
+
+    const financingResults = `
+        <hr>
+        <h3>Financing Results</h3>
+        <p><strong>Loan Amount:</strong> $${loanAmount.toLocaleString()}</p>
+        <p><strong>Calculated monthly payment:</strong> $${monthlyPayment.toLocaleString(undefined,{minimumFractionDigits:0, maximumFractionDigits:2})}</p>
+        <p><strong>Total loan payments per year:</strong> $${annualPayment.toLocaleString(undefined,{minimumFractionDigits:0})}</p>
+        <p><strong>Net annual benefit after loan payments:</strong> $${netAnnualBenefit.toLocaleString(undefined,{minimumFractionDigits:0})}/year</p>
+        <p><strong>Payback (with financing):</strong> ${financedPayback.toFixed(1)} years</p>
+    `;
+
+    document.getElementById("result").innerHTML += financingResults;
+}
+</script>
